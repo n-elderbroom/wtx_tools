@@ -69,7 +69,7 @@ fn convert_to_wtx(
     let bytes = wtx_tools::generate_wtx_from_image(img.to_rgba8(), gen_mipmaps, format, bits);
 
     let mut newpath = PathBuf::from(filename);
-    assert_eq!(newpath.set_extension("png"), true);
+    assert_eq!(newpath.set_extension("wtx"), true);
     let mut file = File::create(newpath)?;
     file.write_all(&bytes)?;
 
