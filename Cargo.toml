@@ -16,4 +16,8 @@ raqote = {version = "0.8.3", features= ["png","pathfinder_geometry"], default-fe
 [lib]
 name = "wtx_tools"
 path = "src/lib.rs"
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "lib"]
+
+[[bin]]
+name = "encoder"
+path = "src/bin/encoder.rs"

@@ -3,9 +3,17 @@ use std::ffi::c_char;
 use image::{ImageBuffer, Rgba};
 use raqote::*;
 
+
+
 #[repr(C)]
 pub struct TextureBuffer {
     data: *mut u8,
+    len: usize,
+}
+
+#[repr(C)]
+pub struct ImgFileBuffer {
+    data: *const c_char, //really u8 or i8. safe-ish to convert? but as c_char the C side won't complain about types
     len: usize,
 }
 
@@ -16,6 +24,17 @@ pub enum WtxFormat {
     DXT1,
 }
 
+#[no_mangle]
+pub extern "C" fn image_to_wtx(image : ImgFileBuffer, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> TextureBuffer {
+    let slice :&[u8] = unsafe { std::slice::from_raw_parts(image.data as *const u8, image.len)};
+    let img = image::load_from_memory(slice).unwrap().to_rgba8();
+    println!("[Rust]: Recieved image. ({:?} bytes, {:?}x{:?})", slice.len(), img.width(), img.height());
+    let mut buf = generate_wtx_from_image(img, gen_mipmaps, format, bits);
+    let data = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    TextureBuffer { data, len }
+}
 
 #[no_mangle]
 pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> TextureBuffer {
@@ -170,17 +189,18 @@ fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u
 
 
     
-     let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
-     let blurred = image::imageops::blur(&img_of_line, 5.);
+    let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
+    let blurred = image::imageops::blur(&img_of_line, 5.);
 
-     let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
-     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
-     image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
+    let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
+    let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
+    image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
     //  bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
-     bg_img
+    println!("[Rust]: generated a desert spec map");
+    bg_img
 }
 
-fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> Vec<u8> {
+pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> Vec<u8> {
     image::imageops::flip_vertical_in_place(&mut img);
     let mut r_amt = 0.;
     let mut g_amt = 0.;
@@ -260,7 +280,7 @@ fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps:
     let mut data = image_dds.get_data(0).unwrap().to_vec();
     wtx_data.append(&mut data);
     
-    println!("[Rust]:generated a custom texture. (Desert puzzle spec map)",);
+    println!("[Rust]: generated a custom texture.",);
     wtx_data    
 }
 
