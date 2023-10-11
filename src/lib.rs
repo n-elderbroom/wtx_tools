@@ -69,10 +69,10 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
     let r = 256. - 90.;
     let half_side_length = r / 3_f32.sqrt();
     let long_r = 2. * half_side_length;
-    let r_2 = 256. - 50.;
+    let r_2 = 256. - 40.;
     let half_side_length_2 = r_2 / 3_f32.sqrt();
     let long_r_2 = 2. * half_side_length_2;
-    let (center_x, center_y) = (256., 256.);
+    let (center_x, center_y) = (260., 256.);
     let coordinates: [(f32, f32); 13] = [
         (center_x - r, center_y - half_side_length),
         (center_x, center_y - long_r),
@@ -104,16 +104,7 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
 
     // let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
     // let bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba;
-    dt.fill_rect(
-        0.,
-        0.,
-        512.,
-        512.,
-        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 200)),
-        // &Source::Image(bg_img, ExtendMode::Repeat, FilterMode::Nearest, Transform::identity()),
-        &DrawOptions::new(),
-    );
-    
+   
     pb = PathBuilder::new();
     pb.move_to(
         coordinates[points.as_slice()[0] as usize].0,
@@ -142,7 +133,7 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
         &StrokeStyle {
             cap: LineCap::Round,
             join: LineJoin::Round,
-            width: 20.,
+            width: 30.,
             miter_limit: 0.,
             dash_array: vec![50., 0.],
             dash_offset: 0.,
@@ -160,7 +151,7 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
         &StrokeStyle {
             cap: LineCap::Round,
             join: LineJoin::Round,
-            width: 20.,
+            width: 30.,
             miter_limit: 2.,
             dash_array: vec![50., 0.],
             dash_offset: 0.,
@@ -170,7 +161,14 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
 
 
     
-     ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap()
+     let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
+     let blurred = image::imageops::blur(&img_of_line, 5.);
+
+     let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
+     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
+     image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
+    //  bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
+     bg_img
 }
 
 fn generate_wtx_bytes(instructions: Vec<u8>) -> Vec<u8> {
@@ -223,6 +221,7 @@ fn generate_wtx_bytes(instructions: Vec<u8>) -> Vec<u8> {
     // let mut bytes_a = a_float.to_le_bytes().to_vec();
     let mut bytes_a = 1.0_f32.to_le_bytes().to_vec(); //hardcoded b/c i dont want rounding errors
 
+    // println!("rgba floats are {:?}",[r_float, g_float, b_float, a_float]);
     let mut data = image_dds.get_data(0).unwrap().to_vec();
     wtx_data.append(&mut bytes_r);
     wtx_data.append(&mut bytes_g);
