@@ -7,7 +7,7 @@
 
 
 enum class WtxFormat {
-  DXT3,
+  DXT5,
   DXT1,
 };
 
