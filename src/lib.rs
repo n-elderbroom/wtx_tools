@@ -10,10 +10,19 @@ pub struct TextureBuffer {
 }
 
 
+#[repr(C)]
+pub enum WtxFormat {
+    DXT3,
+    DXT1,
+}
+
+
 #[no_mangle]
 pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> TextureBuffer {
     let inst = parse_instructions(instructions);
-    let mut buf = generate_wtx_bytes(inst).into_boxed_slice();
+    let img = generate_desert_spec_hexagon_image(inst);
+    // let mut buf = generate_desert_spec_hexagon_wtx(inst).into_boxed_slice();
+    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT1, 0x05); 
     let data = buf.as_mut_ptr();
     let len = buf.len();
     std::mem::forget(buf);
@@ -65,7 +74,7 @@ fn parse_instructions(instructions : *const c_char) -> Vec<u8> {
     instr_vec
 }
 
-fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i dont like this static lifetime
+fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i dont like this static lifetime
     let r = 256. - 90.;
     let half_side_length = r / 3_f32.sqrt();
     let long_r = 2. * half_side_length;
@@ -171,8 +180,7 @@ fn generate_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i d
      bg_img
 }
 
-fn generate_wtx_bytes(instructions: Vec<u8>) -> Vec<u8> {
-    let mut img :ImageBuffer<Rgba<u8>, Vec<u8>> =generate_image(instructions);
+fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> Vec<u8> {
     image::imageops::flip_vertical_in_place(&mut img);
     let mut r_amt = 0.;
     let mut g_amt = 0.;
@@ -190,44 +198,66 @@ fn generate_wtx_bytes(instructions: Vec<u8>) -> Vec<u8> {
     b_amt /= img.pixels().len() as f64;
     a_amt /= img.pixels().len() as f64;
 
+    //downcast floats to f32
+    let (r_float,g_float,b_float, _a_float) = (r_amt as f32, g_amt as f32, b_amt as f32, a_amt as f32);
+    let bytes_r = r_float.to_le_bytes().to_vec();
+    let bytes_g = g_float.to_le_bytes().to_vec();
+    let bytes_b = b_float.to_le_bytes().to_vec();
+    // let mut bytes_a = a_float.to_le_bytes().to_vec();
+    let bytes_a = 1.0_f32.to_le_bytes().to_vec(); //hardcoded b/c i dont want rounding errors
 
+
+    let mipmaps = match gen_mipmaps {
+        true => image_dds::Mipmaps::GeneratedAutomatic,
+        false => image_dds::Mipmaps::GeneratedExact(1),
+    };
+    let img_format = match format {
+        WtxFormat::DXT3 => image_dds::ImageFormat::BC3Unorm,
+        WtxFormat::DXT1 => image_dds::ImageFormat::BC1Unorm,
+    };
+    
     let image_dds = image_dds::dds_from_image(
         &img,
-        image_dds::ImageFormat::BC1Unorm,
+        img_format,
         image_dds::Quality::Fast,
-        image_dds::Mipmaps::GeneratedExact(10),
+        mipmaps,
         // image_dds::Mipmaps::GeneratedAutomatic, //generate mipmaps
     ).unwrap();
     
     
-    //This header basically says
-    //format is DXT1 / BC1
-    //file is 512x512
-    //file has 10 mipmaps
-    //also some floats saying R/G/B/A amounts. for now its (1/3) for R/G/B and 1 for A,
-    //idk if we need to calculate those? does game use that info for anything?
+    //Create the WTX header
     let mut wtx_data = vec![
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x00, 0xd8, 0xaa, 0x02, 0x00, 0x00, 0x02, 0x00,
-        0x02, 0x01, 0x00, 0x0a, 0x00, 0x05, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x00, //header always constant
+        0x00, 0x00, 0x00, 0x00, //these 4 = length of rest of data
+        0x00, 0x00, //width 
+        0x00, 0x00, //height
+        0x01, 0x00, //"depth" always (0x01, 0x00) as these are 2d images
+        0x00, 0x00, //number of mipmaps 
+        bits, //weird bitmask thing
+        0x00, 0x00, 0x00, //these 3 always zero (part of bitmask but always 0?)
+        0x00,0x00,0x00,0x00, //float R
+        0x00,0x00,0x00,0x00, //float G
+        0x00,0x00,0x00,0x00, //float B
+        0x00,0x00,0x00,0x00, //float A
+        0x00,0x00,0x00,0x00, //image format
     ];
-
-    //downcast floats to f32
-    let (r_float,g_float,b_float, _a_float) = (r_amt as f32, g_amt as f32, b_amt as f32, a_amt as f32);
-
-    let mut format_id = vec![0x44, 0x58, 0x54, 0x31,];
-    let mut bytes_r = r_float.to_le_bytes().to_vec();
-    let mut bytes_g = g_float.to_le_bytes().to_vec();
-    let mut bytes_b = b_float.to_le_bytes().to_vec();
-    // let mut bytes_a = a_float.to_le_bytes().to_vec();
-    let mut bytes_a = 1.0_f32.to_le_bytes().to_vec(); //hardcoded b/c i dont want rounding errors
-
+    wtx_data.splice(8..12, (image_dds.data.len() as u32 + 32_u32).to_le_bytes().to_vec());
+    wtx_data.splice(12..14, (img.width() as u16).to_le_bytes().to_vec());
+    wtx_data.splice(14..16, (img.height() as u16).to_le_bytes().to_vec());
+    wtx_data.splice(18..20, (image_dds.get_num_mipmap_levels() as u16).to_le_bytes().to_vec());
+    
+    wtx_data.splice(24..28, bytes_r);
+    wtx_data.splice(28..32, bytes_g);
+    wtx_data.splice(32..36, bytes_b);
+    wtx_data.splice(36..40, bytes_a);
+    let format_id = match format {
+        WtxFormat::DXT3 => vec![0x44, 0x58, 0x54, 0x33,],
+        WtxFormat::DXT1 => vec![0x44, 0x58, 0x54, 0x31,],
+    };
+    wtx_data.splice(40..44, format_id);
+    
     // println!("rgba floats are {:?}",[r_float, g_float, b_float, a_float]);
     let mut data = image_dds.get_data(0).unwrap().to_vec();
-    wtx_data.append(&mut bytes_r);
-    wtx_data.append(&mut bytes_g);
-    wtx_data.append(&mut bytes_b);
-    wtx_data.append(&mut bytes_a);
-    wtx_data.append(&mut format_id);
     wtx_data.append(&mut data);
     
     println!("[Rust]:generated a custom texture. (Desert puzzle spec map)",);
