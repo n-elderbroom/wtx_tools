@@ -20,7 +20,7 @@ pub struct ImgFileBuffer {
 
 #[repr(C)]
 pub enum WtxFormat {
-    DXT3,
+    DXT5,
     DXT1,
 }
 
@@ -232,7 +232,7 @@ pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipm
         false => image_dds::Mipmaps::GeneratedExact(1),
     };
     let img_format = match format {
-        WtxFormat::DXT3 => image_dds::ImageFormat::BC3Unorm,
+        WtxFormat::DXT5 => image_dds::ImageFormat::BC3Unorm,
         WtxFormat::DXT1 => image_dds::ImageFormat::BC1Unorm,
     };
     
@@ -271,7 +271,7 @@ pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipm
     wtx_data.splice(32..36, bytes_b);
     wtx_data.splice(36..40, bytes_a);
     let format_id = match format {
-        WtxFormat::DXT3 => vec![0x44, 0x58, 0x54, 0x33,],
+        WtxFormat::DXT5 => vec![0x44, 0x58, 0x54, 0x35,],
         WtxFormat::DXT1 => vec![0x44, 0x58, 0x54, 0x31,],
     };
     wtx_data.splice(40..44, format_id);

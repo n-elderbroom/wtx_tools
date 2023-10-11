@@ -17,8 +17,8 @@ struct Cli {
     include_mipmaps: bool,
     #[arg(
         long,
-        default_value_t = String::from("DXT3"),
-        help = "format (either DXT3 or DXT1)"
+        default_value_t = String::from("DXT5"),
+        help = "format (either DXT5 or DXT1)"
     )]
     format: String,
     #[arg(
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
         let path = Path::new(&arg);
         let enumformat = match args.format.as_str() {
             "DXT1" => wtx_tools::WtxFormat::DXT1,
-            "DXT3" => wtx_tools::WtxFormat::DXT3,
+            "DXT5" => wtx_tools::WtxFormat::DXT5,
             _ => panic!("unsupported format"),
         };
         let result = convert_to_wtx(&path, args.include_mipmaps, enumformat, args.bits);
@@ -70,8 +70,8 @@ fn convert_to_wtx(
 
     let mut newpath = PathBuf::from(filename);
     assert_eq!(newpath.set_extension("wtx"), true);
-    let mut file = File::create(newpath)?;
+    let mut file = File::create(&newpath)?;
     file.write_all(&bytes)?;
-
+    println!("Saved {:?}", newpath);
     Ok(())
 }
