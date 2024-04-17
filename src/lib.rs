@@ -80,7 +80,7 @@ fn parse_instructions(instructions : *const c_char) -> Vec<u8> {
             "Bottom" => 4,
             "BottomLeft" => 5,
             "Center" => 6,
-            "TopLetEnd" => 7,
+            "TopLeftEnd" => 7,
             "TopEnd" => 8,
             "TopRightEnd" => 9,
             "BottomRightEnd" => 10,
