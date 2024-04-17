@@ -232,8 +232,8 @@ pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipm
         false => image_dds::Mipmaps::GeneratedExact(1),
     };
     let img_format = match format {
-        WtxFormat::DXT5 => image_dds::ImageFormat::BC3Srgb,
-        WtxFormat::DXT1 => image_dds::ImageFormat::BC3Srgb,
+        WtxFormat::DXT5 => image_dds::ImageFormat::BC3RgbaUnorm,
+        WtxFormat::DXT1 => image_dds::ImageFormat::BC1RgbaUnorm,
     };
     
     let image_dds = image_dds::dds_from_image(
