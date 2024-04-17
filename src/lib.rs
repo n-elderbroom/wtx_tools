@@ -248,15 +248,13 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
     for (coords, color) in std::iter::zip(dot_coordinates,grid.grid) {
         if color != WtxColor::NoColor {
             let realcolor = match color {
-                //RED and BLUE are swapped because apparently raqote's get_data() does BGRA format?
-                //i *could* switch the channels around but for this few colors i can do it by hand
                 WtxColor::TricolorWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
-                WtxColor::TricolorPurple => SolidSource{r: 0xff, g: 0x51, b:0xa5, a:0xFF},
-                WtxColor::TricolorGreen => SolidSource{r: 0x5d, g: 0xab, b:0x6e, a:0xFF},
+                WtxColor::TricolorPurple => SolidSource{r: 0xa5, g: 0x51, b:0xff, a:0xFF},
+                WtxColor::TricolorGreen => SolidSource{r: 0x6e, g: 0xab, b:0x5d, a:0xFF},
                 WtxColor::TricolorNewWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
-                WtxColor::TricolorNewPink => SolidSource{r: 0xf0, g: 0x37, b:0xa4, a:0xFF},
-                WtxColor::TricolorNewBlue => SolidSource{r: 0xe9, g: 0xa8, b:0x00, a:0xFF},
-                WtxColor::TricolorNewYellow => SolidSource{r: 0x45, g: 0xf8, b:0xf9, a:0xFF},
+                WtxColor::TricolorNewPink => SolidSource{r: 0xa4, g: 0x37, b:0xf0, a:0xFF},
+                WtxColor::TricolorNewBlue => SolidSource{r: 0x00, g: 0xa8, b:0xe9, a:0xFF},
+                WtxColor::TricolorNewYellow => SolidSource{r: 0xf9, g: 0xf8, b:0x45, a:0xFF},
                 WtxColor::NoColor => unreachable!()
             };
 
@@ -281,9 +279,12 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
         }
     }
 
-    let img_of_dots = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
+    let mut img_of_dots: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
     // img_of_dots.save("/tmp/genimgdots.png").unwrap(); //debug preview
-
+    for pixel in img_of_dots.pixels_mut() {
+        pixel.channels_mut().swap(0, 2); //fix pixel order
+    }
+    
     let bg_img_bytes = match background {
         ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
     };
