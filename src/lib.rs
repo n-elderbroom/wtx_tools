@@ -282,7 +282,7 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
     }
 
     let img_of_dots = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
-    img_of_dots.save("/tmp/genimgdots.png").unwrap(); //debug preview
+    // img_of_dots.save("/tmp/genimgdots.png").unwrap(); //debug preview
 
     let bg_img_bytes = match background {
         ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
