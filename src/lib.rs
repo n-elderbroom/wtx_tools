@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
-use image::{ImageBuffer, Rgba};
+use image::{ImageBuffer, Rgba, Pixel};
 use raqote::*;
 
 
@@ -17,11 +17,35 @@ pub struct ImgFileBuffer {
     len: usize,
 }
 
+#[repr(C)]
+#[derive(PartialEq)]
+pub enum WtxColor {
+    NoColor,
+
+    TricolorWhite,
+    TricolorPurple,
+    TricolorGreen,
+
+    TricolorNewWhite,
+    TricolorNewPink,
+    TricolorNewBlue,
+    TricolorNewYellow,
+}
+
+#[repr(C)]
+pub struct WtxPuzzle3x3 {
+    grid: [WtxColor; 9],
+}
+
 
 #[repr(C)]
 pub enum WtxFormat {
     DXT5,
     DXT1,
+}
+
+enum ColorPanelBackground {
+    Blueprint
 }
 
 #[no_mangle]
@@ -47,6 +71,21 @@ pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> Text
     std::mem::forget(buf);
     TextureBuffer { data, len }
 }
+
+#[no_mangle]
+pub extern "C" fn generate_tricolor_panel_wtx(grid : WtxPuzzle3x3) -> TextureBuffer {
+    let img  = generate_colordots_panel(grid, ColorPanelBackground::Blueprint);
+
+    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
+    let data = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    TextureBuffer { data, len }
+}
+
+
+
+
 
 #[no_mangle]
 pub extern "C" fn free_texbuf(buf: TextureBuffer) {
@@ -199,6 +238,68 @@ fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u
     println!("[Rust]: generated a desert spec map");
     bg_img
 }
+
+fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let mut dt = DrawTarget::new(1024, 1024);
+
+    let dot_coordinates = vec![(280.0,280.0),(512.0,280.0),(744.0,280.0),
+                                (280.0,512.0),(512.0,512.0),(744.0,512.0),
+                                (280.0,744.0),(512.0,744.0),(744.0,744.0)];
+    for (coords, color) in std::iter::zip(dot_coordinates,grid.grid) {
+        if color != WtxColor::NoColor {
+            let realcolor = match color {
+                //RED and BLUE are swapped because apparently raqote's get_data() does BGRA format?
+                //i *could* switch the channels around but for this few colors i can do it by hand
+                WtxColor::TricolorWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
+                WtxColor::TricolorPurple => SolidSource{r: 0xff, g: 0x51, b:0xa5, a:0xFF},
+                WtxColor::TricolorGreen => SolidSource{r: 0x5d, g: 0xab, b:0x6e, a:0xFF},
+                WtxColor::TricolorNewWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
+                WtxColor::TricolorNewPink => SolidSource{r: 0xf0, g: 0x37, b:0xa4, a:0xFF},
+                WtxColor::TricolorNewBlue => SolidSource{r: 0xe9, g: 0xa8, b:0x00, a:0xFF},
+                WtxColor::TricolorNewYellow => SolidSource{r: 0x45, g: 0xf8, b:0xf9, a:0xFF},
+                WtxColor::NoColor => unreachable!()
+            };
+
+            let mut pb = PathBuilder::new();
+            pb.move_to(coords.0 - 20.0, coords.1 - 20.0);
+            pb.line_to(coords.0 - 20.0, coords.1 + 20.0);
+            pb.line_to(coords.0 + 20.0, coords.1 + 20.0);
+            pb.line_to(coords.0 + 20.0, coords.1 - 20.0);
+            pb.line_to(coords.0 - 20.0, coords.1 - 20.0);
+            pb.close();
+            let path = pb.finish();
+            dt.fill(&path, &Source::Solid(realcolor), &DrawOptions::new());
+            dt.stroke(&path, &Source::Solid(realcolor),&StrokeStyle {
+                cap: LineCap::Round,
+                join: LineJoin::Round,
+                width: 32.,
+                miter_limit: 2.,
+                dash_array: vec![50.0, 0.0],
+                dash_offset: 0.0,
+            }, &DrawOptions::new());
+            // println!("[rust] placed a dot");
+        }
+    }
+
+    let img_of_dots = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
+    img_of_dots.save("/tmp/genimgdots.png").unwrap(); //debug preview
+
+    let bg_img_bytes = match background {
+        ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
+    };
+    let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
+    image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
+
+    
+    for pixel in bg_img.pixels_mut() {
+        pixel.apply_with_alpha(|color| color, |_| 0);
+    }
+    // bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
+
+    println!("[Rust]: generated a colored dots panel");
+    bg_img
+}
+
 
 pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> Vec<u8> {
     image::imageops::flip_vertical_in_place(&mut img);

@@ -4,8 +4,26 @@
 using namespace std;
 
 int main() {
-    TextureBuffer x = generate_desert_spec_wtx("TopLeft Top Center Bottom BottomLeft BottomLeftEnd");
+    
+    WtxPuzzle3x3 puzzle = { {
+                WtxColor::NoColor,              WtxColor::TricolorGreen,    WtxColor::NoColor,
+                WtxColor::TricolorPurple,       WtxColor::NoColor,          WtxColor::TricolorGreen,
+                WtxColor::TricolorWhite,        WtxColor::TricolorPurple,   WtxColor::NoColor} };
+
+    TextureBuffer x = generate_tricolor_panel_wtx(puzzle);
+
+
+    
+    // TextureBuffer x = generate_desert_spec_wtx("Center Top TopLeft BottomLeft Bottom BottomRight TopRight TopRightEnd");
+    
     printf("got %lu bytes wtx file from rust.\n", x.len);
+
+    ofstream outputBuffer("./color_panel_custom.wtx", ios::out | ios::binary);
+    outputBuffer.write((const char *) x.data, x.len);
+    // outputBuffer.
+    outputBuffer.close();
+
+
     free_texbuf(x); //rust lib has to be the one to call free() on that memory?
 
 
