@@ -45,7 +45,11 @@ pub enum WtxFormat {
 }
 
 enum ColorPanelBackground {
-    Blueprint
+    Blueprint, // used on introductory puzzles
+    White, // used in the 2 shipping container puzzles
+    LightGrey, // First 2 color-filter puzzles
+    DarkGrey, // third color-filter puzzle
+    DarkestGrey, // Used on elevator
 }
 
 #[no_mangle]
@@ -285,8 +289,12 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
         pixel.channels_mut().swap(0, 2); //fix pixel order
     }
     
-    let bg_img_bytes = match background {
+    let bg_img_bytes: &[u8] = match background {
         ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
+        ColorPanelBackground::White => include_bytes!("color_bunker_whitepaper.png"),
+        ColorPanelBackground::LightGrey => include_bytes!("color_bunker_greyred_light.png"),
+        ColorPanelBackground::DarkGrey => include_bytes!("color_bunker_greyred_dark.png"),
+        ColorPanelBackground::DarkestGrey => include_bytes!("color_bunker_elevator.png"),
     };
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
