@@ -6,6 +6,14 @@
 #include <new>
 
 
+enum class ColorPanelBackground {
+  Blueprint,
+  White,
+  Lightgrey,
+  Darkgrey,
+  Elevator,
+};
+
 enum class WtxColor {
   NoColor,
   TricolorWhite,
@@ -43,8 +51,13 @@ void free_texbuf(TextureBuffer buf);
 
 TextureBuffer generate_desert_spec_wtx(const char *instructions);
 
-TextureBuffer generate_tricolor_panel_wtx(WtxPuzzle3x3 grid);
+TextureBuffer generate_tricolor_panel_wtx(WtxPuzzle3x3 grid, ColorPanelBackground background);
 
 TextureBuffer image_to_wtx(ImgFileBuffer image, bool gen_mipmaps, WtxFormat format, uint8_t bits);
+
+TextureBuffer wtx_tools_generate_colorpanel_from_grid(const uint32_t *n,
+                                                      size_t width,
+                                                      size_t height,
+                                                      ColorPanelBackground bg);
 
 } // extern "C"

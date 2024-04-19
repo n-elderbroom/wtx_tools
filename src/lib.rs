@@ -1,5 +1,7 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
+use libc::size_t;
+use std::slice;
 use image::{ImageBuffer, Rgba, Pixel};
 use raqote::*;
 
@@ -18,7 +20,7 @@ pub struct ImgFileBuffer {
 }
 
 #[repr(C)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum WtxColor {
     NoColor,
 
@@ -44,12 +46,76 @@ pub enum WtxFormat {
     DXT1,
 }
 
-enum ColorPanelBackground {
+
+#[repr(C)]
+#[derive(PartialEq)]
+pub enum ColorPanelBackground {
     Blueprint, // used on introductory puzzles
     White, // used in the 2 shipping container puzzles
     LightGrey, // First 2 color-filter puzzles
     DarkGrey, // third color-filter puzzle
-    DarkestGrey, // Used on elevator
+    Elevator, // only used on elevator
+}
+
+// This function is intended to be called by witness randomizer code
+// The `*cost u32` in the arguments should pbe the start of a structure equivalent to  `_grid` from a `Panel`
+// It should be flattened to a contiguous array first, so that this rust code can read it.
+// Rust recalculates the size through the width and height. Width and height here is of the grid array - not
+// what you would probably consider the size of the puzzle. For a 3x3 puzzle for instance, thats (3*2 +1) in each dimension on the array, so 7x7.
+#[no_mangle]
+pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, width: size_t, height:size_t, bg: ColorPanelBackground) -> TextureBuffer {
+    println!("[Rust]: Recieved some data...");
+
+    let gridflat = unsafe {
+        assert!(!grid.is_null());
+
+        slice::from_raw_parts(grid, height as usize * width as usize)
+    };
+
+    assert!(gridflat.len() == 49); //TODO panels larger than 3x3
+
+    let mut grid = Vec::<Vec<u32>>::new();
+    for i in 0..height {
+        let mut row = Vec::<u32>::new();
+        for j in 0..width {
+            row.push(gridflat[i*height + j])
+        }
+        grid.push(row);
+    }
+    //now we have rebuilt a nice vector for the whole grid
+
+    let mut just_stones_vec = Vec::new(); //we want to ignore most of the grid - only look for the stones
+
+    for (rownum, row) in grid.into_iter().enumerate() {
+        for (colnum, cell) in row.into_iter().enumerate() {
+            if (rownum % 2 != 0) && (colnum % 2 != 0) {
+                //this is between two lines
+                if cell & 0x100 > 0 {
+                    //stone here
+                    just_stones_vec.push(match cell & 0xF {
+                        // 0x0 => WtxColor::NoColor,
+                        0x2 => WtxColor::TricolorWhite,
+                        0x4 => WtxColor::TricolorPurple,
+                        0x5 => WtxColor::TricolorGreen,
+                        0x6 => WtxColor::TricolorNewBlue,
+                        0x7 => WtxColor::TricolorNewPink,
+                        0x8 => WtxColor::TricolorNewYellow,
+                        _ => todo!() //panic if unknown color
+                    })
+                } else {
+                    just_stones_vec.push(WtxColor::NoColor)
+                }
+            }
+        }
+    }
+
+    // TODO rewrite this for arbirary sized puzzlse (maybe also arbitrary colors?)
+    let mut x = WtxPuzzle3x3{grid: [WtxColor::NoColor;9]}; 
+    for (index, _ ) in x.grid.into_iter().enumerate() { 
+        x.grid[index] = just_stones_vec[index]
+    }
+    generate_tricolor_panel_wtx(x, bg)
+
 }
 
 #[no_mangle]
@@ -77,8 +143,8 @@ pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> Text
 }
 
 #[no_mangle]
-pub extern "C" fn generate_tricolor_panel_wtx(grid : WtxPuzzle3x3) -> TextureBuffer {
-    let img  = generate_colordots_panel(grid, ColorPanelBackground::Blueprint);
+pub extern "C" fn generate_tricolor_panel_wtx(grid : WtxPuzzle3x3, background: ColorPanelBackground) -> TextureBuffer {
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(grid, background);
 
     let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
     let data = buf.as_mut_ptr();
@@ -294,7 +360,7 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
         ColorPanelBackground::White => include_bytes!("color_bunker_whitepaper.png"),
         ColorPanelBackground::LightGrey => include_bytes!("color_bunker_greyred_light.png"),
         ColorPanelBackground::DarkGrey => include_bytes!("color_bunker_greyred_dark.png"),
-        ColorPanelBackground::DarkestGrey => include_bytes!("color_bunker_elevator.png"),
+        ColorPanelBackground::Elevator => include_bytes!("color_bunker_elevator.png"),
     };
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);

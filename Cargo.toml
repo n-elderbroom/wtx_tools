@@ -11,12 +11,13 @@ color-eyre = "0.6.2"
 image = "0.24.9"
 image_dds = "0.5.1"
 itertools = "0.12.1"
+libc = "0.2.153"
 raqote = {version = "0.8.3", features= ["png","pathfinder_geometry"], default-features = false}
 
 [lib]
 name = "wtx_tools"
 path = "src/lib.rs"
-crate-type = ["staticlib", "lib"]
+crate-type = ["cdylib", "lib"]
 
 [[bin]]
 name = "encoder"
