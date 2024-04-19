@@ -301,7 +301,7 @@ fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u
     let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
     let blurred = image::imageops::blur(&img_of_line, 5.);
 
-    let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
+    let bg_img_bytes = include_bytes!("images/desertspecpanel_square_bg.png");
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
     //  bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
@@ -356,11 +356,11 @@ fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground
     }
     
     let bg_img_bytes: &[u8] = match background {
-        ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
-        ColorPanelBackground::White => include_bytes!("color_bunker_whitepaper.png"),
-        ColorPanelBackground::LightGrey => include_bytes!("color_bunker_greyred_light.png"),
-        ColorPanelBackground::DarkGrey => include_bytes!("color_bunker_greyred_dark.png"),
-        ColorPanelBackground::Elevator => include_bytes!("color_bunker_elevator.png"),
+        ColorPanelBackground::Blueprint => include_bytes!("images/color_bunker_blueprint_bg.png"),
+        ColorPanelBackground::White => include_bytes!("images/color_bunker_whitepaper.png"),
+        ColorPanelBackground::LightGrey => include_bytes!("images/color_bunker_greyred_light.png"),
+        ColorPanelBackground::DarkGrey => include_bytes!("images/color_bunker_greyred_dark.png"),
+        ColorPanelBackground::Elevator => include_bytes!("images/color_bunker_elevator.png"),
     };
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
