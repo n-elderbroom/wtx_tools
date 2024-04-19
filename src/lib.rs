@@ -72,7 +72,7 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
         slice::from_raw_parts(grid, height as usize * width as usize)
     };
 
-    assert!(gridflat.len() == 49); //TODO panels larger than 3x3
+    // assert!(gridflat.len() == 49); //TODO panels larger than 3x3
 
     let mut grid = Vec::<Vec<u32>>::new();
     for i in 0..height {
@@ -109,13 +109,86 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
         }
     }
 
-    // TODO rewrite this for arbirary sized puzzlse (maybe also arbitrary colors?)
-    let mut x = WtxPuzzle3x3{grid: [WtxColor::NoColor;9]}; 
-    for (index, _ ) in x.grid.into_iter().enumerate() { 
-        x.grid[index] = just_stones_vec[index]
-    }
-    generate_tricolor_panel_wtx(x, bg)
+    generate_tricolor_panel_wtx(just_stones_vec, bg)
 
+}
+
+
+//Internal function to generate Imagebuffer from a vec of colors
+//This function takes shapes 3x3, 4x4, or 4x5
+fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let mut dt: DrawTarget = DrawTarget::new(1024, 1024);
+    
+    let dot_coordinates = match stones.len() {
+        9  => vec![(280.0,280.0),(512.0,280.0),(744.0,280.0),
+                    (280.0,512.0),(512.0,512.0),(744.0,512.0),
+                    (280.0,744.0),(512.0,744.0),(744.0,744.0)],
+        16 => vec![(238.0,238.0),(375.0,238.0),(650.0,238.0),(787.0,238.0),
+                    (238.0,375.0),(375.0,375.0),(650.0,375.0),(787.0,375.0),
+                    (238.0,650.0),(375.0,650.0),(650.0,650.0),(787.0,650.0),
+                    (238.0,787.0),(375.0,787.0),(650.0,787.0),(787.0,787.0),],
+        20 => vec![(212.0,288.0),(362.0,288.0),(512.0,288.0),(662.0,288.0),(812.0,288.0),
+                    (212.0,368.0),(362.0,368.0),(512.0,368.0),(662.0,368.0),(812.0,368.0),
+                    (212.0,656.0),(362.0,656.0),(512.0,656.0),(662.0,656.0),(812.0,656.0),
+                    (212.0,800.0),(362.0,800.0),(512.0,800.0),(662.0,800.0),(812.0,800.0)],
+        _ => unimplemented!()
+    };
+    
+    for (coords, color) in std::iter::zip(dot_coordinates, stones) {
+        if color != WtxColor::NoColor {
+            let realcolor = match color {
+                WtxColor::TricolorWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
+                WtxColor::TricolorPurple => SolidSource{r: 0xa5, g: 0x51, b:0xff, a:0xFF},
+                WtxColor::TricolorGreen => SolidSource{r: 0x6e, g: 0xab, b:0x5d, a:0xFF},
+                WtxColor::TricolorNewWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
+                WtxColor::TricolorNewPink => SolidSource{r: 0xa4, g: 0x37, b:0xf0, a:0xFF},
+                WtxColor::TricolorNewBlue => SolidSource{r: 0x00, g: 0xa8, b:0xe9, a:0xFF},
+                WtxColor::TricolorNewYellow => SolidSource{r: 0xf9, g: 0xf8, b:0x45, a:0xFF},
+                WtxColor::NoColor => unreachable!()
+            };
+
+            let mut pb = PathBuilder::new();
+            pb.move_to(coords.0 - 20.0, coords.1 - 20.0);
+            pb.line_to(coords.0 - 20.0, coords.1 + 20.0);
+            pb.line_to(coords.0 + 20.0, coords.1 + 20.0);
+            pb.line_to(coords.0 + 20.0, coords.1 - 20.0);
+            pb.line_to(coords.0 - 20.0, coords.1 - 20.0);
+            pb.close();
+            let path = pb.finish();
+            dt.fill(&path, &Source::Solid(realcolor), &DrawOptions::new());
+            dt.stroke(&path, &Source::Solid(realcolor),&StrokeStyle {
+                cap: LineCap::Round,
+                join: LineJoin::Round,
+                width: 32.,
+                miter_limit: 2.,
+                dash_array: vec![50.0, 0.0],
+                dash_offset: 0.0,
+            }, &DrawOptions::new());
+            // println!("[rust] placed a dot");
+        }
+    }
+    let mut img_of_dots: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
+    for pixel in img_of_dots.pixels_mut() {
+        pixel.channels_mut().swap(0, 2); //fix pixel order
+    }
+
+    let bg_img_bytes: &[u8] = match background {
+        ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
+        ColorPanelBackground::White => include_bytes!("color_bunker_whitepaper.png"),
+        ColorPanelBackground::LightGrey => include_bytes!("color_bunker_greyred_light.png"),
+        ColorPanelBackground::DarkGrey => include_bytes!("color_bunker_greyred_dark.png"),
+        ColorPanelBackground::Elevator => include_bytes!("color_bunker_elevator.png"),
+    };
+    let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
+    image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
+
+    for pixel in bg_img.pixels_mut() {
+        pixel.apply_with_alpha(|color| color, |_| 0);
+    }
+    // bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
+
+    println!("[Rust]: generated a colored dots panel");
+    bg_img
 }
 
 #[no_mangle]
@@ -143,8 +216,8 @@ pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> Text
 }
 
 #[no_mangle]
-pub extern "C" fn generate_tricolor_panel_wtx(grid : WtxPuzzle3x3, background: ColorPanelBackground) -> TextureBuffer {
-    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(grid, background);
+pub extern "C" fn generate_tricolor_panel_3x3_wtx(grid : WtxPuzzle3x3, background: ColorPanelBackground) -> TextureBuffer {
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel_3x3(grid, background);
 
     let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
     let data = buf.as_mut_ptr();
@@ -153,6 +226,15 @@ pub extern "C" fn generate_tricolor_panel_wtx(grid : WtxPuzzle3x3, background: C
     TextureBuffer { data, len }
 }
 
+fn generate_tricolor_panel_wtx(stoneslist: Vec<WtxColor>, background: ColorPanelBackground) -> TextureBuffer {
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(stoneslist, background);
+
+    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
+    let data = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    TextureBuffer { data, len }
+}
 
 
 
@@ -309,8 +391,8 @@ fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u
     bg_img
 }
 
-fn generate_colordots_panel(grid: WtxPuzzle3x3, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let mut dt = DrawTarget::new(1024, 1024);
+fn generate_colordots_panel_3x3(grid: WtxPuzzle3x3, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    let mut dt: DrawTarget = DrawTarget::new(1024, 1024);
 
     let dot_coordinates = vec![(280.0,280.0),(512.0,280.0),(744.0,280.0),
                                 (280.0,512.0),(512.0,512.0),(744.0,512.0),

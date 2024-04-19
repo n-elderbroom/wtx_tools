@@ -22,7 +22,8 @@
 
         # For `nix develop`:
         devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [ rustc cargo rustfmt rust-analyzer rustup clang rust-cbindgen];
+          nativeBuildInputs = with pkgs; [ rustc cargo rustfmt rust-analyzer vscode-extensions.rust-lang.rust-analyzer rustup clang rust-cbindgen cargo-cross];
+          RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}"; # fixes rust analyzer?
         };
       }
     );
