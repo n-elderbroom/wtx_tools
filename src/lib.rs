@@ -173,11 +173,11 @@ fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackgr
     }
 
     let bg_img_bytes: &[u8] = match background {
-        ColorPanelBackground::Blueprint => include_bytes!("color_bunker_blueprint_bg.png"),
-        ColorPanelBackground::White => include_bytes!("color_bunker_whitepaper.png"),
-        ColorPanelBackground::LightGrey => include_bytes!("color_bunker_greyred_light.png"),
-        ColorPanelBackground::DarkGrey => include_bytes!("color_bunker_greyred_dark.png"),
-        ColorPanelBackground::Elevator => include_bytes!("color_bunker_elevator.png"),
+        ColorPanelBackground::Blueprint => include_bytes!("images/color_bunker_blueprint_bg.png"),
+        ColorPanelBackground::White => include_bytes!("images/color_bunker_whitepaper.png"),
+        ColorPanelBackground::LightGrey => include_bytes!("images/color_bunker_greyred_light.png"),
+        ColorPanelBackground::DarkGrey => include_bytes!("images/color_bunker_greyred_dark.png"),
+        ColorPanelBackground::Elevator => include_bytes!("images/color_bunker_elevator.png"),
     };
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
