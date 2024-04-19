@@ -10,7 +10,7 @@ int main() {
                 WtxColor::TricolorPurple,       WtxColor::NoColor,          WtxColor::TricolorGreen,
                 WtxColor::TricolorWhite,        WtxColor::TricolorPurple,   WtxColor::NoColor} };
 
-    TextureBuffer x = generate_tricolor_panel_wtx(puzzle, ColorPanelBackground::Blueprint);
+    TextureBuffer x = generate_tricolor_panel_3x3_wtx(puzzle, ColorPanelBackground::Blueprint);
 
 
     
