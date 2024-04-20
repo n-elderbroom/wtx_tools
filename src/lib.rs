@@ -86,7 +86,7 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
 #[no_mangle]
 pub extern "C" fn wtx_tools_generate_colorpanel_from_grid_and_save(grid: *const u32, width: size_t, height:size_t, bg: ColorPanelBackground, id: i32) -> TextureBuffer {
     let just_stones_vec = collect_stones_from_grid(grid, width, height);
-    generate_tricolor_panel_wtx(just_stones_vec, bg, None)
+    generate_tricolor_panel_wtx(just_stones_vec, bg, Some(id))
 }
 
 
