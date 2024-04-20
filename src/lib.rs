@@ -1,6 +1,5 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
-use color_eyre::owo_colors::colors::xterm::JungleMist;
 use libc::size_t;
 use std::slice;
 use image::{ImageBuffer, Rgba, Pixel};
