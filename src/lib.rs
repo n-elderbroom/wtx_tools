@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
+use color_eyre::owo_colors::colors::xterm::JungleMist;
 use libc::size_t;
 use std::slice;
 use image::{ImageBuffer, Rgba, Pixel};
@@ -8,18 +9,23 @@ use raqote::*;
 
 
 #[repr(C)]
+/// C-and-Rust readable struct. Contains wtx-formatted texture.
 pub struct TextureBuffer {
     data: *mut u8,
     len: usize,
 }
 
 #[repr(C)]
+/// C-and-Rust readable struct. Contains an image, png/jpeg/etc, to be converted to a wtx texture.
+/// image can be any format readable by rust's `image` crate.
 pub struct ImgFileBuffer {
     data: *const c_char, //really u8 or i8. safe-ish to convert? but as c_char the C side won't complain about types
     len: usize,
 }
 
 #[repr(C)]
+// TODO remove this
+/// enum defining color of a 'stone'. Used internally.
 #[derive(PartialEq, Clone, Copy)]
 pub enum WtxColor {
     NoColor,
@@ -49,23 +55,42 @@ pub enum WtxFormat {
 
 #[repr(C)]
 #[derive(PartialEq)]
+/// Enum used to decide which background to give a generated color-panel image
 pub enum ColorPanelBackground {
-    Blueprint, // used on introductory puzzles
-    White, // used in the 2 shipping container puzzles
-    LightGrey, // First 2 color-filter puzzles
-    DarkGrey, // third color-filter puzzle
-    Elevator, // only used on elevator
+    /// used on introductory puzzles
+    Blueprint, 
+    /// used in the 2 shipping container puzzles
+    White,
+    /// First 2 color-filter puzzles
+    LightGrey, 
+    /// third color-filter puzzle. Slightly darker gray    
+    DarkGrey, 
+    /// only used on elevator
+    Elevator,
 }
 
-// This function is intended to be called by witness randomizer code
-// The `*cost u32` in the arguments should pbe the start of a structure equivalent to  `_grid` from a `Panel`
-// It should be flattened to a contiguous array first, so that this rust code can read it.
-// Rust recalculates the size through the width and height. Width and height here is of the grid array - not
-// what you would probably consider the size of the puzzle. For a 3x3 puzzle for instance, thats (3*2 +1) in each dimension on the array, so 7x7.
+/// Generates a complete 'wtx' file from a `_grid`, with background `bg`
+/// The `*cost u32` in the arguments should pbe the start of a structure equivalent to  `_grid` from a `Panel`
+/// It should be flattened to a contiguous array first, so that this rust code can read it.
+/// Rust recalculates the size through the width and height. Width and height here is of the grid array - not
+/// what you would probably consider the size of the puzzle. For a 3x3 puzzle for instance, thats (3*2 +1) in each dimension on the array, so 7x7.
 #[no_mangle]
 pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, width: size_t, height:size_t, bg: ColorPanelBackground) -> TextureBuffer {
-    println!("[Rust]: Recieved some data...");
+    let just_stones_vec = collect_stones_from_grid(grid, width, height);
+    generate_tricolor_panel_wtx(just_stones_vec, bg, None)
+}
 
+/// This function is intended to be called by witness randomizer code
+/// It is the same as `wtx_tools_generate_colorpanel_from_grid` but with an extra `id` argument.
+/// this will save the generated image to disk as ./generated_{id}.png
+#[no_mangle]
+pub extern "C" fn wtx_tools_generate_colorpanel_from_grid_and_save(grid: *const u32, width: size_t, height:size_t, bg: ColorPanelBackground, id: i32) -> TextureBuffer {
+    let just_stones_vec = collect_stones_from_grid(grid, width, height);
+    generate_tricolor_panel_wtx(just_stones_vec, bg, None)
+}
+
+
+fn collect_stones_from_grid(grid: *const u32, width: size_t, height:size_t) -> Vec<WtxColor>{
     let gridflat = unsafe {
         assert!(!grid.is_null());
 
@@ -106,15 +131,13 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
             }
         }
     }
-    
-    generate_tricolor_panel_wtx(just_stones_vec, bg)
-
+    just_stones_vec
 }
 
 
-//Internal function to generate Imagebuffer from a vec of colors
-//This function takes shapes 3x3, 4x4, or 4x5
-fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+///Internal function to generate Imagebuffer from a vec of colors
+///This function takes shapes 3x3, 4x4, or 4x5
+fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackground, filename_id: Option<i32>) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut dt: DrawTarget = DrawTarget::new(1024, 1024);
 
     let dot_coordinates = match stones.len() {
@@ -185,7 +208,9 @@ fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackgr
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
 
-    // bg_img.save(format!("./generated_{:x}.png", id)).unwrap(); //save BEFORE we strip alpha channel
+    if let Some(id) = filename_id {
+        bg_img.save(format!("./generated_{:x}.png", id)).unwrap(); //save BEFORE we strip alpha channel
+    }
     for pixel in bg_img.pixels_mut() {
         pixel.apply_with_alpha(|color| color, |_| 0);
     }
@@ -195,6 +220,7 @@ fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackgr
 }
 
 #[no_mangle]
+/// Converts ImgFileBuffer to a TextureBuffer containing an wtx-formatted image
 pub extern "C" fn image_to_wtx(image : ImgFileBuffer, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> TextureBuffer {
     let slice :&[u8] = unsafe { std::slice::from_raw_parts(image.data as *const u8, image.len)};
     let img = image::load_from_memory(slice).unwrap().to_rgba8();
@@ -219,20 +245,21 @@ pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> Text
 }
 
 #[no_mangle]
+/// Old function - to be removed. Generates only 3x3 grid, takes a struct containing array of 9 enums.
 pub extern "C" fn generate_tricolor_panel_3x3_wtx(grid : WtxPuzzle3x3, background: ColorPanelBackground) -> TextureBuffer {
     let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel_3x3(grid, background);
 
-    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
+    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); 
     let data = buf.as_mut_ptr();
     let len = buf.len();
     std::mem::forget(buf);
     TextureBuffer { data, len }
 }
 
-fn generate_tricolor_panel_wtx(stoneslist: Vec<WtxColor>, background: ColorPanelBackground) -> TextureBuffer {
-    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(stoneslist, background);
+fn generate_tricolor_panel_wtx(stoneslist: Vec<WtxColor>, background: ColorPanelBackground, filename_id : Option<i32>) -> TextureBuffer {
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(stoneslist, background, filename_id);
 
-    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); //TODO double check bits
+    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); 
     let data = buf.as_mut_ptr();
     let len = buf.len();
     std::mem::forget(buf);
@@ -243,6 +270,8 @@ fn generate_tricolor_panel_wtx(stoneslist: Vec<WtxColor>, background: ColorPanel
 
 
 #[no_mangle]
+/// Call this to free a rust-allocated TextureBuffer
+/// Rust will keep track of memory it allocated and must be informed to free it.
 pub extern "C" fn free_texbuf(buf: TextureBuffer) {
     let s = unsafe { std::slice::from_raw_parts_mut(buf.data, buf.len) };
     let s = s.as_mut_ptr();
