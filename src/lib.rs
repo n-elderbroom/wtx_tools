@@ -71,21 +71,18 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
 
         slice::from_raw_parts(grid, height as usize * width as usize)
     };
-
     // assert!(gridflat.len() == 49); //TODO panels larger than 3x3
 
     let mut grid = Vec::<Vec<u32>>::new();
     for i in 0..height {
         let mut row = Vec::<u32>::new();
         for j in 0..width {
-            row.push(gridflat[i*height + j])
+            row.push(gridflat[i + j*height]) // this is the problem
         }
         grid.push(row);
     }
     //now we have rebuilt a nice vector for the whole grid
-
     let mut just_stones_vec = Vec::new(); //we want to ignore most of the grid - only look for the stones
-
     for (rownum, row) in grid.into_iter().enumerate() {
         for (colnum, cell) in row.into_iter().enumerate() {
             if (rownum % 2 != 0) && (colnum % 2 != 0) {
@@ -97,9 +94,10 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
                         0x2 => WtxColor::TricolorWhite,
                         0x4 => WtxColor::TricolorPurple,
                         0x5 => WtxColor::TricolorGreen,
-                        0x6 => WtxColor::TricolorNewBlue,
+                        // 0x6 => WtxColor::TricolorNewBlue, //CYAN
                         0x7 => WtxColor::TricolorNewPink,
                         0x8 => WtxColor::TricolorNewYellow,
+                        0x9 => WtxColor::TricolorNewBlue,
                         _ => todo!() //panic if unknown color
                     })
                 } else {
@@ -108,7 +106,7 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
             }
         }
     }
-
+    
     generate_tricolor_panel_wtx(just_stones_vec, bg)
 
 }
@@ -118,22 +116,27 @@ pub extern "C" fn wtx_tools_generate_colorpanel_from_grid(grid: *const u32, widt
 //This function takes shapes 3x3, 4x4, or 4x5
 fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut dt: DrawTarget = DrawTarget::new(1024, 1024);
-    
+
     let dot_coordinates = match stones.len() {
         9  => vec![(280.0,280.0),(512.0,280.0),(744.0,280.0),
                     (280.0,512.0),(512.0,512.0),(744.0,512.0),
                     (280.0,744.0),(512.0,744.0),(744.0,744.0)],
-        16 => vec![(238.0,238.0),(375.0,238.0),(650.0,238.0),(787.0,238.0),
-                    (238.0,375.0),(375.0,375.0),(650.0,375.0),(787.0,375.0),
-                    (238.0,650.0),(375.0,650.0),(650.0,650.0),(787.0,650.0),
-                    (238.0,787.0),(375.0,787.0),(650.0,787.0),(787.0,787.0),],
+        16 => vec![(238.0,238.0),(421.0,238.0),(604.0,238.0),(787.0,238.0),
+                    (238.0,421.0),(421.0,421.0),(604.0,421.0),(787.0,421.0),
+                    (238.0,604.0),(421.0,604.0),(604.0,604.0),(787.0,604.0),
+                    (238.0,787.0),(421.0,787.0),(604.0,787.0),(787.0,787.0),],
         20 => vec![(212.0,288.0),(362.0,288.0),(512.0,288.0),(662.0,288.0),(812.0,288.0),
-                    (212.0,368.0),(362.0,368.0),(512.0,368.0),(662.0,368.0),(812.0,368.0),
-                    (212.0,656.0),(362.0,656.0),(512.0,656.0),(662.0,656.0),(812.0,656.0),
-                    (212.0,800.0),(362.0,800.0),(512.0,800.0),(662.0,800.0),(812.0,800.0)],
+                    (212.0,437.0),(362.0,437.0),(512.0,437.0),(662.0,437.0),(812.0,437.0),
+                    (212.0,586.0),(362.0,586.0),(512.0,586.0),(662.0,586.0),(812.0,586.0),
+                    (212.0,736.0),(362.0,736.0),(512.0,736.0),(662.0,736.0),(812.0,736.0)],
         _ => unimplemented!()
     };
-    
+    let scale = match stones.len() {
+        9 => 32.0,
+        16 => 30.0,
+        20 => 20.0,
+        _ => unimplemented!()
+    };
     for (coords, color) in std::iter::zip(dot_coordinates, stones) {
         if color != WtxColor::NoColor {
             let realcolor = match color {
@@ -159,7 +162,7 @@ fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackgr
             dt.stroke(&path, &Source::Solid(realcolor),&StrokeStyle {
                 cap: LineCap::Round,
                 join: LineJoin::Round,
-                width: 32.,
+                width: scale,
                 miter_limit: 2.,
                 dash_array: vec![50.0, 0.0],
                 dash_offset: 0.0,
@@ -182,11 +185,11 @@ fn generate_colordots_panel(stones : Vec<WtxColor>, background: ColorPanelBackgr
     let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
 
+    // bg_img.save(format!("./generated_{:x}.png", id)).unwrap(); //save BEFORE we strip alpha channel
     for pixel in bg_img.pixels_mut() {
         pixel.apply_with_alpha(|color| color, |_| 0);
     }
     // bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
-
     println!("[Rust]: generated a colored dots panel");
     bg_img
 }
@@ -537,7 +540,7 @@ pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipm
     // println!("rgba floats are {:?}",[r_float, g_float, b_float, a_float]);
     let mut data = image_dds.get_data(0).unwrap().to_vec();
     wtx_data.append(&mut data);
-    
+
     println!("[Rust]: generated a custom texture.",);
     wtx_data    
 }
