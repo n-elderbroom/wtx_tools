@@ -1,16 +1,22 @@
 #include <stdio.h>
 #include "wtx_tools.h"
 #include <fstream>
+#include <vector>
 using namespace std;
 
 int main() {
     
+    vector<float> xarray{ .5, .2, .9 };
+    vector<float> yarray{ .2, .7, .9 };
+
+    TextureBuffer x = generate_desert_spec_line(&xarray[0], &yarray[0], xarray.size(), 30.0);
+
     WtxPuzzle3x3 puzzle = { {
                 WtxColor::NoColor,              WtxColor::TricolorGreen,    WtxColor::NoColor,
                 WtxColor::TricolorPurple,       WtxColor::NoColor,          WtxColor::TricolorGreen,
                 WtxColor::TricolorWhite,        WtxColor::TricolorPurple,   WtxColor::NoColor} };
 
-    TextureBuffer x = generate_tricolor_panel_3x3_wtx(puzzle, ColorPanelBackground::Blueprint);
+    // TextureBuffer x = generate_tricolor_panel_3x3_wtx(puzzle, ColorPanelBackground::Blueprint);
 
 
     
