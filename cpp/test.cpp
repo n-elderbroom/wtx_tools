@@ -6,10 +6,10 @@ using namespace std;
 
 int main() {
     
-    vector<float> xarray{ .5, .2, .9 };
-    vector<float> yarray{ .2, .7, .9 };
+    vector<float> xarray{ .1, .4, .4 };
+    vector<float> yarray{ .1, .1, .4 };
 
-    TextureBuffer x = generate_desert_spec_line(&xarray[0], &yarray[0], xarray.size(), 30.0);
+    TextureBuffer x = generate_desert_spec_line_sym(&xarray[0], &yarray[0], xarray.size(), 30.0,1);
 
     WtxPuzzle3x3 puzzle = { {
                 WtxColor::NoColor,              WtxColor::TricolorGreen,    WtxColor::NoColor,

@@ -66,6 +66,12 @@ TextureBuffer generate_desert_spec_line(const float *xpoints,
                                         size_t numpoints,
                                         float thickness);
 
+TextureBuffer generate_desert_spec_line_sym(const float *xpoints,
+                                            const float *ypoints,
+                                            size_t numpoints,
+                                            float thickness,
+                                            int32_t symmetry);
+
 TextureBuffer generate_desert_spec_wtx(const char *instructions);
 
 /// Old function - to be removed. Generates only 3x3 grid, takes a struct containing array of 9 enums.

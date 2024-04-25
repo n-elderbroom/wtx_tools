@@ -245,10 +245,42 @@ pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> Text
 }
 
 
+///mirrors a point on a panel of dimensions width and height.
+///value of `symmetry` matches the enum in the randomizer. (except pillar symmetry options)
+fn get_mirrored_point (point: (f32,f32), symmetry: i32, width: f32, height: f32) -> Option<(f32,f32)> {
+    let (x,y) = point;
+
+    match symmetry {
+        0=> None,
+        1=> Some((x, height - y)), //horizontal
+        2=> Some((width -x, y)), //vertical
+        3=> Some((width -x, height - y)), //rotational 180
+        4=> Some((y, width - x)), //rotate left
+        5=> Some((height - y, x)), //rotate right
+        6=> Some((y,x)), //flip x/y
+        7=> Some((height - y, width - x)), //flip neg x/y
+        8=> Some((x, (y + (height/2.0) ) % height)), //parallel horizontal
+        9=> Some(((x + (width / 2.0)) % width  ,y)), //parallel vertical
+        10=> Some((width -x, (y + (height/2.0) ) % height)), //paralel horizontal, flipped
+        11=> Some(((x + (width / 2.0)) % width  , height -y)), //parallel vertical, flipped
+
+        // case Symmetry::PillarParallel: return Point(x + _width / 2, y);
+		// case Symmetry::PillarHorizontal: return Point(x + _width / 2, _height - 1 - y);
+		// case Symmetry::PillarVertical: return Point( _width / 2 - x, y);
+		// case Symmetry::PillarRotational: return Point(_width / 2 - x, _height - 1 - y);
+
+
+        _=>None,
+    }
+
+}
+
+
 #[no_mangle]
-//Generates an arbitrary spec map with a line pattern according to an array of x/y points.
-//generated images are 512x512 squares 
-pub extern "C" fn generate_desert_spec_line(xpoints: *const f32, ypoints: *const f32, numpoints: size_t, thickness : c_float) -> TextureBuffer {
+///Generates an arbitrary spec map with a line pattern according to an array of x/y points with symmetry.
+///generated images are 512x512 squares.
+///symmetry is an `int` corresponding to the randomizers' existing Symmetry enum.
+pub extern "C" fn generate_desert_spec_line_sym(xpoints: *const f32, ypoints: *const f32, numpoints: size_t, thickness : c_float, symmetry : i32) -> TextureBuffer {
     let x_vec = unsafe {
         assert!(!xpoints.is_null());
 
@@ -265,7 +297,7 @@ pub extern "C" fn generate_desert_spec_line(xpoints: *const f32, ypoints: *const
     for p in &points {
         println!("point {:?}", p);
     }
-    let img = generate_desert_spec_line_img(points, thickness);
+    let img = generate_desert_spec_line_img(points, thickness, symmetry);
     // let mut buf = generate_desert_spec_hexagon_wtx(inst).into_boxed_slice();
     let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT1, 0x05); 
     let data = buf.as_mut_ptr();
@@ -274,7 +306,16 @@ pub extern "C" fn generate_desert_spec_line(xpoints: *const f32, ypoints: *const
     TextureBuffer { data, len }
 }
 
-fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+
+
+#[no_mangle]
+///Generates an arbitrary spec map with a line pattern according to an array of x/y points.
+///generated images are 512x512 squares 
+pub extern "C" fn generate_desert_spec_line(xpoints: *const f32, ypoints: *const f32, numpoints: size_t, thickness : c_float) -> TextureBuffer {
+    generate_desert_spec_line_sym(xpoints, ypoints, numpoints, thickness, 0)
+}
+
+fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32, symmetry : i32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
     let mut dt = DrawTarget::new(512, 512);
     let mut pb = PathBuilder::new();
 
@@ -286,7 +327,7 @@ fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32) -> Im
         pb.line_to(point.0, point.1)
     }
     let path = pb.finish();
-
+    
     //now prepare the dot bit
     pb = PathBuilder::new();
     pb.move_to(scaledpoints[0].0, scaledpoints[0].1);
@@ -329,6 +370,58 @@ fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32) -> Im
         },
         &DrawOptions::new(),
     );
+    if symmetry != 0 {
+        pb = PathBuilder::new();
+        let mirrored : Vec<(f32,f32)>  = scaledpoints.iter().map(|x| get_mirrored_point(*x, symmetry, 512.0, 512.0).unwrap()).collect();
+        // println!("mirrored points {:?}", mirrored);
+        pb.move_to(mirrored[0].0, mirrored[0].1);
+        for point in &mirrored.as_slice()[1..] {
+            pb.line_to(point.0, point.1)
+        }
+        let mirror_path = pb.finish();
+
+        pb = PathBuilder::new();
+        pb.move_to(mirrored[0].0, mirrored[0].1);
+        pb.line_to(mirrored[0].0, mirrored[0].1);
+        pb.arc(mirrored[0].0, mirrored[0].1, 0.5*thickness, 0., 360.);
+        let mirror_dot: Path = pb.finish();
+        dt.stroke(
+            &mirror_dot,
+            &Source::Solid(SolidSource {
+                r: 0x00,
+                g: 0x00,
+                b: 0x00,
+                a: 0xff,
+            }),
+            &StrokeStyle {
+                cap: LineCap::Round,
+                join: LineJoin::Round,
+                width: thickness,
+                miter_limit: 0.,
+                dash_array: vec![50., 0.],
+                dash_offset: 0.,
+            },
+            &DrawOptions::new(),
+        );
+        dt.stroke(
+            &mirror_path,
+            &Source::Solid(SolidSource {
+                r: 0x00,
+                g: 0x00,
+                b: 0x00,
+                a: 0xff,
+            }),
+            &StrokeStyle {
+                cap: LineCap::Round,
+                join: LineJoin::Round,
+                width: thickness,
+                miter_limit: 2.,
+                dash_array: vec![50., 0.],
+                dash_offset: 0.,
+            },
+            &DrawOptions::new(),
+        );
+    }
 
     let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
     let blurred: ImageBuffer<Rgba<u8>, Vec<u8>> = image::imageops::blur(&img_of_line, 5.);
@@ -336,7 +429,7 @@ fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32) -> Im
 
     let mut bg_img: ImageBuffer<Rgba<u8>, Vec<u8>> = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
     image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
-    //  bg_img.save("./genimg.png").unwrap(); //debug preview
+    // bg_img.save("./genimg.png").unwrap(); //debug preview
     println!("[Rust]: generated a desert spec map");
     bg_img
 }
