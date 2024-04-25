@@ -61,11 +61,16 @@ extern "C" {
 /// Rust will keep track of memory it allocated and must be informed to free it.
 void free_texbuf(TextureBuffer buf);
 
+///Generates an arbitrary spec map with a line pattern according to an array of x/y points.
+///generated images are 512x512 squares
 TextureBuffer generate_desert_spec_line(const float *xpoints,
                                         const float *ypoints,
                                         size_t numpoints,
                                         float thickness);
 
+///Generates an arbitrary spec map with a line pattern according to an array of x/y points with symmetry.
+///generated images are 512x512 squares.
+///symmetry is an `int` corresponding to the randomizers' existing Symmetry enum.
 TextureBuffer generate_desert_spec_line_sym(const float *xpoints,
                                             const float *ypoints,
                                             size_t numpoints,
