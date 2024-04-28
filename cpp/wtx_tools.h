@@ -20,18 +20,6 @@ enum class ColorPanelBackground {
   Elevator,
 };
 
-/// enum defining color of a 'stone'. Used internally.
-enum class WtxColor {
-  NoColor,
-  TricolorWhite,
-  TricolorPurple,
-  TricolorGreen,
-  TricolorNewWhite,
-  TricolorNewPink,
-  TricolorNewBlue,
-  TricolorNewYellow,
-};
-
 enum class WtxFormat {
   DXT5,
   DXT1,
@@ -41,10 +29,6 @@ enum class WtxFormat {
 struct TextureBuffer {
   uint8_t *data;
   size_t len;
-};
-
-struct WtxPuzzle3x3 {
-  WtxColor grid[9];
 };
 
 /// C-and-Rust readable struct. Contains an image, png/jpeg/etc, to be converted to a wtx texture.
@@ -84,12 +68,6 @@ TextureBuffer generate_desert_spec_line_sym(const float *xpoints,
                                             size_t numpoints,
                                             float thickness,
                                             int32_t symmetry);
-
-TextureBuffer generate_desert_spec_wtx(const char *instructions);
-
-/// Old function - to be removed. Generates only 3x3 grid, takes a struct containing array of 9 enums.
-TextureBuffer generate_tricolor_panel_3x3_wtx(WtxPuzzle3x3 grid,
-                                              ColorPanelBackground background);
 
 /// Converts ImgFileBuffer to a TextureBuffer containing an wtx-formatted image
 TextureBuffer image_to_wtx(ImgFileBuffer image, bool gen_mipmaps, WtxFormat format, uint8_t bits);

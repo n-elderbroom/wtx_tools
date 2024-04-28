@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 use std::ffi::c_char;
 use libc::c_float;
 use libc::size_t;
@@ -39,12 +38,6 @@ pub enum WtxColor {
     TricolorNewBlue,
     TricolorNewYellow,
 }
-
-#[repr(C)]
-pub struct WtxPuzzle3x3 {
-    grid: [WtxColor; 9],
-}
-
 
 #[repr(C)]
 pub enum WtxFormat {
@@ -232,18 +225,6 @@ pub extern "C" fn image_to_wtx(image : ImgFileBuffer, gen_mipmaps: bool, format:
     TextureBuffer { data, len }
 }
 
-#[no_mangle]
-pub extern "C" fn generate_desert_spec_wtx(instructions : *const c_char) -> TextureBuffer {
-    let inst = parse_instructions(instructions);
-    let img = generate_desert_spec_hexagon_image(inst);
-    // let mut buf = generate_desert_spec_hexagon_wtx(inst).into_boxed_slice();
-    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT1, 0x05); 
-    let data = buf.as_mut_ptr();
-    let len = buf.len();
-    std::mem::forget(buf);
-    TextureBuffer { data, len }
-}
-
 
 ///mirrors a point on a panel of dimensions width and height.
 ///value of `symmetry` matches the enum in the randomizer. (except pillar symmetry options)
@@ -354,122 +335,20 @@ pub extern "C" fn generate_desert_spec_line(xpoints: *const f32, ypoints: *const
 }
 
 fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32, symmetry : i32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let mut dt = DrawTarget::new(512, 512);
-    let mut pb = PathBuilder::new();
-
-    let scaledpoints : Vec<(f32,f32)> = points.into_iter().map(|x| (x.0 * 512.0, x.1 * 512.0)).collect();
-
-
-    pb.move_to(scaledpoints[0].0, scaledpoints[0].1);
-    for point in &scaledpoints.as_slice()[1..] {
-        pb.line_to(point.0, point.1)
-    }
-    let path = pb.finish();
     
-    //now prepare the dot bit
-    pb = PathBuilder::new();
-    pb.move_to(scaledpoints[0].0, scaledpoints[0].1);
-    pb.line_to(scaledpoints[0].0, scaledpoints[0].1);
-    pb.arc(scaledpoints[0].0, scaledpoints[0].1, 0.5*thickness, 0., 360.);
-    let dotpath: Path = pb.finish();
-    dt.stroke(
-        &dotpath,
-        &Source::Solid(SolidSource {
-            r: 0x00,
-            g: 0x00,
-            b: 0x00,
-            a: 0xff,
-        }),
-        &StrokeStyle {
-            cap: LineCap::Round,
-            join: LineJoin::Round,
-            width: thickness,
-            miter_limit: 0.,
-            dash_array: vec![50., 0.],
-            dash_offset: 0.,
-        },
-        &DrawOptions::new(),
-    );
-    dt.stroke(
-        &path,
-        &Source::Solid(SolidSource {
-            r: 0x00,
-            g: 0x00,
-            b: 0x00,
-            a: 0xff,
-        }),
-        &StrokeStyle {
-            cap: LineCap::Round,
-            join: LineJoin::Round,
-            width: thickness,
-            miter_limit: 2.,
-            dash_array: vec![50., 0.],
-            dash_offset: 0.,
-        },
-        &DrawOptions::new(),
-    );
-    if symmetry != 0 {
-        pb = PathBuilder::new();
-        let mirrored : Vec<(f32,f32)>  = scaledpoints.iter().map(|x| get_mirrored_point(*x, symmetry, 512.0, 512.0).unwrap()).collect();
-        // println!("mirrored points {:?}", mirrored);
-        pb.move_to(mirrored[0].0, mirrored[0].1);
-        for point in &mirrored.as_slice()[1..] {
-            pb.line_to(point.0, point.1)
-        }
-        let mirror_path = pb.finish();
-
-        pb = PathBuilder::new();
-        pb.move_to(mirrored[0].0, mirrored[0].1);
-        pb.line_to(mirrored[0].0, mirrored[0].1);
-        pb.arc(mirrored[0].0, mirrored[0].1, 0.5*thickness, 0., 360.);
-        let mirror_dot: Path = pb.finish();
-        dt.stroke(
-            &mirror_dot,
-            &Source::Solid(SolidSource {
-                r: 0x00,
-                g: 0x00,
-                b: 0x00,
-                a: 0xff,
-            }),
-            &StrokeStyle {
-                cap: LineCap::Round,
-                join: LineJoin::Round,
-                width: thickness,
-                miter_limit: 0.,
-                dash_array: vec![50., 0.],
-                dash_offset: 0.,
-            },
-            &DrawOptions::new(),
-        );
-        dt.stroke(
-            &mirror_path,
-            &Source::Solid(SolidSource {
-                r: 0x00,
-                g: 0x00,
-                b: 0x00,
-                a: 0xff,
-            }),
-            &StrokeStyle {
-                cap: LineCap::Round,
-                join: LineJoin::Round,
-                width: thickness,
-                miter_limit: 2.,
-                dash_array: vec![50., 0.],
-                dash_offset: 0.,
-            },
-            &DrawOptions::new(),
-        );
-    }
-
-    let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
-    let blurred: ImageBuffer<Rgba<u8>, Vec<u8>> = image::imageops::blur(&img_of_line, 5.);
     let bg_img_bytes = include_bytes!("images/desertspecpanel_square_bg.png");
+    let bg_img: ImageBuffer<Rgba<u8>, Vec<u8>> = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
 
-    let mut bg_img: ImageBuffer<Rgba<u8>, Vec<u8>> = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
-    image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
+
+    let mut img_of_line = draw_line_on_image(bg_img, points.clone(), thickness);
+    if symmetry != 0 {
+        let mirrored_points : Vec<(f32,f32)>  = points.iter().map(|x| get_mirrored_point(*x, symmetry, 512.0, 512.0).unwrap()).collect();
+        let mirrored_line_img = draw_line_on_image(img_of_line, mirrored_points, thickness);
+        img_of_line = mirrored_line_img;
+    }
     // bg_img.save("./genimg.png").unwrap(); //debug preview
     println!("[Rust]: generated a desert spec map");
-    bg_img
+    img_of_line
 }
 
 //draw a line with dot on an image surface.
@@ -540,17 +419,6 @@ fn draw_line_on_image(bg_img: ImageBuffer<Rgba<u8>, Vec<u8>>, points : Vec<(f32,
     new_img
 }
 
-#[no_mangle]
-/// Old function - to be removed. Generates only 3x3 grid, takes a struct containing array of 9 enums.
-pub extern "C" fn generate_tricolor_panel_3x3_wtx(grid : WtxPuzzle3x3, background: ColorPanelBackground) -> TextureBuffer {
-    let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel_3x3(grid, background);
-
-    let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT5, 0x01); 
-    let data = buf.as_mut_ptr();
-    let len = buf.len();
-    std::mem::forget(buf);
-    TextureBuffer { data, len }
-}
 
 fn generate_tricolor_panel_wtx(stoneslist: Vec<WtxColor>, background: ColorPanelBackground, filename_id : Option<i32>) -> TextureBuffer {
     let img: ImageBuffer<Rgba<u8>, Vec<u8>>  = generate_colordots_panel(stoneslist, background, filename_id);
@@ -575,216 +443,6 @@ pub extern "C" fn free_texbuf(buf: TextureBuffer) {
         drop(Box::from_raw(s));
     }
 }
-
-fn parse_instructions(instructions : *const c_char) -> Vec<u8> {
-    let cstr = unsafe { CStr::from_ptr(instructions) };
-    // Get copy-on-write Cow<'_, str>, then guarantee a freshly-owned String allocation
-    let instr_string : String = String::from_utf8_lossy(cstr.to_bytes()).to_string();
-    // println!("got strings {:?}",&instr_string);
-    let mut instr_vec = Vec::new();
-    for substring in instr_string.split(" ") {
-        // println!("Substring is '{:?}'", substring);
-        //      8
-        //  7   1   9
-        //    0   2 
-        //      6
-        //    5   3
-        //  12  4  10
-        //      11
-        instr_vec.push(match substring {
-            "TopLeft" => 0,
-            "Top" => 1,
-            "TopRight" => 2,
-            "BottomRight" => 3,
-            "Bottom" => 4,
-            "BottomLeft" => 5,
-            "Center" => 6,
-            "TopLeftEnd" => 7,
-            "TopEnd" => 8,
-            "TopRightEnd" => 9,
-            "BottomRightEnd" => 10,
-            "BottomEnd" => 11,
-            "BottomLeftEnd" => 12,
-            _ => panic!("unexpected isntruction string"),
-        });
-    };
-
-    instr_vec
-}
-
-fn generate_desert_spec_hexagon_image<'a>(points: Vec<u8>) -> ImageBuffer<Rgba<u8>, Vec<u8>> { //i dont like this static lifetime    
-    let r = 256. - 90.;
-    let half_side_length = r / 3_f32.sqrt();
-    let long_r = 2. * half_side_length;
-    let r_2 = 256. - 40.;
-    let half_side_length_2 = r_2 / 3_f32.sqrt();
-    let long_r_2 = 2. * half_side_length_2;
-    let (center_x, center_y) = (260., 256.);
-    let coordinates: [(f32, f32); 13] = [
-        (center_x - r, center_y - half_side_length),
-        (center_x, center_y - long_r),
-        (center_x + r, center_y - half_side_length),
-        (center_x + r, center_y + half_side_length),
-        (center_x, center_y + long_r),
-        (center_x - r, center_y + half_side_length),
-        (center_x + 0., center_y + 0.),
-        (center_x - r_2, center_y - half_side_length_2),
-        (center_x, center_y - long_r_2),
-        (center_x + r_2, center_y - half_side_length_2),
-        (center_x + r_2, center_y + half_side_length_2),
-        (center_x, center_y + long_r_2),
-        (center_x - r_2, center_y + half_side_length_2),
-    ];
-
-    let mut dt = DrawTarget::new(512, 512);
-    let mut pb = PathBuilder::new();
-
-    pb.move_to(
-        coordinates[points.as_slice()[0] as usize].0,
-        coordinates[points.as_slice()[0] as usize].1,
-    );
-    for node in &points.as_slice()[1..] {
-        pb.line_to(coordinates[*node as usize].0, coordinates[*node as usize].1);
-    }
-    // pb.line_to(260., 512-center_ege_distance.); bottom center
-    let path = pb.finish();
-
-    // let bg_img_bytes = include_bytes!("desertspecpanel_square_bg.png");
-    // let bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba;
-   
-    pb = PathBuilder::new();
-    pb.move_to(
-        coordinates[points.as_slice()[0] as usize].0,
-        coordinates[points.as_slice()[0] as usize].1,
-    );
-    pb.line_to(
-        coordinates[points.as_slice()[0] as usize].0,
-        coordinates[points.as_slice()[0] as usize].1,
-    );
-    pb.arc(
-        coordinates[points.as_slice()[0] as usize].0,
-        coordinates[points.as_slice()[0] as usize].1,
-        20.,
-        0.,
-        180.,
-    );
-    let dotpath: Path = pb.finish();
-    dt.stroke(
-        &dotpath,
-        &Source::Solid(SolidSource {
-            r: 0x00,
-            g: 0x00,
-            b: 0x00,
-            a: 0xff,
-        }),
-        &StrokeStyle {
-            cap: LineCap::Round,
-            join: LineJoin::Round,
-            width: 30.,
-            miter_limit: 0.,
-            dash_array: vec![50., 0.],
-            dash_offset: 0.,
-        },
-        &DrawOptions::new(),
-    );
-    dt.stroke(
-        &path,
-        &Source::Solid(SolidSource {
-            r: 0x00,
-            g: 0x00,
-            b: 0x00,
-            a: 0xff,
-        }),
-        &StrokeStyle {
-            cap: LineCap::Round,
-            join: LineJoin::Round,
-            width: 30.,
-            miter_limit: 2.,
-            dash_array: vec![50., 0.],
-            dash_offset: 0.,
-        },
-        &DrawOptions::new(),
-    );
-
-
-    
-    let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
-    let blurred: ImageBuffer<Rgba<u8>, Vec<u8>> = image::imageops::blur(&img_of_line, 5.);
-
-    let bg_img_bytes = include_bytes!("images/desertspecpanel_square_bg.png");
-    let mut bg_img: ImageBuffer<Rgba<u8>, Vec<u8>> = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
-    image::imageops::overlay(&mut bg_img, &blurred, 0, 0);
-    //  bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
-    println!("[Rust]: generated a desert spec map");
-    bg_img
-}
-
-fn generate_colordots_panel_3x3(grid: WtxPuzzle3x3, background: ColorPanelBackground) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-    let mut dt: DrawTarget = DrawTarget::new(1024, 1024);
-
-    let dot_coordinates = vec![(280.0,280.0),(512.0,280.0),(744.0,280.0),
-                                (280.0,512.0),(512.0,512.0),(744.0,512.0),
-                                (280.0,744.0),(512.0,744.0),(744.0,744.0)];
-    for (coords, color) in std::iter::zip(dot_coordinates,grid.grid) {
-        if color != WtxColor::NoColor {
-            let realcolor = match color {
-                WtxColor::TricolorWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
-                WtxColor::TricolorPurple => SolidSource{r: 0xa5, g: 0x51, b:0xff, a:0xFF},
-                WtxColor::TricolorGreen => SolidSource{r: 0x6e, g: 0xab, b:0x5d, a:0xFF},
-                WtxColor::TricolorNewWhite => SolidSource{r: 0xff, g: 0xff, b:0xff, a:0xFF},
-                WtxColor::TricolorNewPink => SolidSource{r: 0xa4, g: 0x37, b:0xf0, a:0xFF},
-                WtxColor::TricolorNewBlue => SolidSource{r: 0x00, g: 0xa8, b:0xe9, a:0xFF},
-                WtxColor::TricolorNewYellow => SolidSource{r: 0xf9, g: 0xf8, b:0x45, a:0xFF},
-                WtxColor::NoColor => unreachable!()
-            };
-
-            let mut pb = PathBuilder::new();
-            pb.move_to(coords.0 - 20.0, coords.1 - 20.0);
-            pb.line_to(coords.0 - 20.0, coords.1 + 20.0);
-            pb.line_to(coords.0 + 20.0, coords.1 + 20.0);
-            pb.line_to(coords.0 + 20.0, coords.1 - 20.0);
-            pb.line_to(coords.0 - 20.0, coords.1 - 20.0);
-            pb.close();
-            let path = pb.finish();
-            dt.fill(&path, &Source::Solid(realcolor), &DrawOptions::new());
-            dt.stroke(&path, &Source::Solid(realcolor),&StrokeStyle {
-                cap: LineCap::Round,
-                join: LineJoin::Round,
-                width: 32.,
-                miter_limit: 2.,
-                dash_array: vec![50.0, 0.0],
-                dash_offset: 0.0,
-            }, &DrawOptions::new());
-            // println!("[rust] placed a dot");
-        }
-    }
-
-    let mut img_of_dots: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(1024,1024,dt.get_data_u8().to_vec()).unwrap();
-    // img_of_dots.save("/tmp/genimgdots.png").unwrap(); //debug preview
-    for pixel in img_of_dots.pixels_mut() {
-        pixel.channels_mut().swap(0, 2); //fix pixel order
-    }
-    
-    let bg_img_bytes: &[u8] = match background {
-        ColorPanelBackground::Blueprint => include_bytes!("images/color_bunker_blueprint_bg.png"),
-        ColorPanelBackground::White => include_bytes!("images/color_bunker_whitepaper.png"),
-        ColorPanelBackground::LightGrey => include_bytes!("images/color_bunker_greyred_light.png"),
-        ColorPanelBackground::DarkGrey => include_bytes!("images/color_bunker_greyred_dark.png"),
-        ColorPanelBackground::Elevator => include_bytes!("images/color_bunker_elevator.png"),
-    };
-    let mut bg_img = image::load_from_memory(bg_img_bytes).unwrap().to_rgba8();
-    image::imageops::overlay(&mut bg_img, &img_of_dots, 0, 0);
-
-    
-    for pixel in bg_img.pixels_mut() {
-        pixel.apply_with_alpha(|color| color, |_| 0);
-    }
-    // bg_img.save("/tmp/genimg.png").unwrap(); //debug preview
-
-    println!("[Rust]: generated a colored dots panel");
-    bg_img
-}
-
 
 pub fn generate_wtx_from_image(mut img: ImageBuffer<Rgba<u8>, Vec<u8>>, gen_mipmaps: bool, format: WtxFormat, bits: u8) -> Vec<u8> {
     image::imageops::flip_vertical_in_place(&mut img);
