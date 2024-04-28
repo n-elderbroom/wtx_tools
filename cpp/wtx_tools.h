@@ -68,6 +68,14 @@ TextureBuffer generate_desert_spec_line(const float *xpoints,
                                         size_t numpoints,
                                         float thickness);
 
+TextureBuffer generate_desert_spec_line_2(const float *xpoints,
+                                          const float *ypoints,
+                                          size_t numpoints,
+                                          const float *xpoints2,
+                                          const float *ypoints2,
+                                          size_t numpoints2,
+                                          float thickness);
+
 ///Generates an arbitrary spec map with a line pattern according to an array of x/y points with symmetry.
 ///generated images are 512x512 squares.
 ///symmetry is an `int` corresponding to the randomizers' existing Symmetry enum.

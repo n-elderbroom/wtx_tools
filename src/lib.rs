@@ -275,6 +275,44 @@ fn get_mirrored_point (point: (f32,f32), symmetry: i32, width: f32, height: f32)
 
 }
 
+#[no_mangle]
+pub extern "C" fn generate_desert_spec_line_2(xpoints: *const f32, ypoints: *const f32, numpoints: size_t, xpoints2: *const f32, ypoints2: *const f32, numpoints2: size_t, thickness : c_float) -> TextureBuffer {
+    let x_vec = unsafe {
+        assert!(!xpoints.is_null());
+
+        slice::from_raw_parts(xpoints, numpoints)
+    };
+    let y_vec = unsafe {
+        assert!(!ypoints.is_null());
+
+        slice::from_raw_parts(ypoints, numpoints)
+    };
+    let points : Vec<(f32, f32)> = std::iter::zip(x_vec, y_vec).map(|x| (x.0.clone(), x.1.clone())).collect();
+
+    let x_vec_2 = unsafe {
+        assert!(!xpoints2.is_null());
+
+        slice::from_raw_parts(xpoints2, numpoints2)
+    };
+    let y_vec_2 = unsafe {
+        assert!(!ypoints2.is_null());
+
+        slice::from_raw_parts(ypoints2, numpoints2)
+    };
+
+    let points_2 : Vec<(f32, f32)> = std::iter::zip(x_vec_2, y_vec_2).map(|x| (x.0.clone(), x.1.clone())).collect();
+
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>> = generate_desert_spec_line_img(points, thickness, 0);
+
+    let img2 = draw_line_on_image(img, points_2, thickness);
+    
+
+    let mut buf = generate_wtx_from_image(img2, true, WtxFormat::DXT1, 0x05); 
+    let data = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    TextureBuffer { data, len }
+}
 
 #[no_mangle]
 ///Generates an arbitrary spec map with a line pattern according to an array of x/y points with symmetry.
@@ -297,7 +335,7 @@ pub extern "C" fn generate_desert_spec_line_sym(xpoints: *const f32, ypoints: *c
     for p in &points {
         println!("point {:?}", p);
     }
-    let img = generate_desert_spec_line_img(points, thickness, symmetry);
+    let img: ImageBuffer<Rgba<u8>, Vec<u8>> = generate_desert_spec_line_img(points, thickness, symmetry);
     // let mut buf = generate_desert_spec_hexagon_wtx(inst).into_boxed_slice();
     let mut buf = generate_wtx_from_image(img, true, WtxFormat::DXT1, 0x05); 
     let data = buf.as_mut_ptr();
@@ -434,6 +472,73 @@ fn generate_desert_spec_line_img(points : Vec<(f32,f32)>, thickness : f32, symme
     bg_img
 }
 
+//draw a line with dot on an image surface.
+//TODO refactor more code to re-use this
+fn draw_line_on_image(bg_img: ImageBuffer<Rgba<u8>, Vec<u8>>, points : Vec<(f32,f32)>, thickness : c_float) -> ImageBuffer<Rgba<u8>, Vec<u8>>{
+
+    let mut dt = DrawTarget::new(512, 512);
+    let mut pb = PathBuilder::new();
+
+    let scaledpoints : Vec<(f32,f32)> = points.into_iter().map(|x| (x.0 * 512.0, x.1 * 512.0)).collect();
+
+
+    pb.move_to(scaledpoints[0].0, scaledpoints[0].1);
+    for point in &scaledpoints.as_slice()[1..] {
+        pb.line_to(point.0, point.1)
+    }
+    let path = pb.finish();
+    
+    //now prepare the dot bit
+    pb = PathBuilder::new();
+    pb.move_to(scaledpoints[0].0, scaledpoints[0].1);
+    pb.line_to(scaledpoints[0].0, scaledpoints[0].1);
+    pb.arc(scaledpoints[0].0, scaledpoints[0].1, 0.5*thickness, 0., 360.);
+    let dotpath: Path = pb.finish();
+    dt.stroke(
+        &dotpath,
+        &Source::Solid(SolidSource {
+            r: 0x00,
+            g: 0x00,
+            b: 0x00,
+            a: 0xff,
+        }),
+        &StrokeStyle {
+            cap: LineCap::Round,
+            join: LineJoin::Round,
+            width: thickness,
+            miter_limit: 0.,
+            dash_array: vec![50., 0.],
+            dash_offset: 0.,
+        },
+        &DrawOptions::new(),
+    );
+    dt.stroke(
+        &path,
+        &Source::Solid(SolidSource {
+            r: 0x00,
+            g: 0x00,
+            b: 0x00,
+            a: 0xff,
+        }),
+        &StrokeStyle {
+            cap: LineCap::Round,
+            join: LineJoin::Round,
+            width: thickness,
+            miter_limit: 2.,
+            dash_array: vec![50., 0.],
+            dash_offset: 0.,
+        },
+        &DrawOptions::new(),
+    );
+
+    let img_of_line = ImageBuffer::from_raw(512,512,dt.get_data_u8().to_vec()).unwrap();
+    let blurred: ImageBuffer<Rgba<u8>, Vec<u8>> = image::imageops::blur(&img_of_line, 5.);
+    let mut new_img = bg_img.clone();
+    image::imageops::overlay(&mut new_img, &blurred, 0, 0);
+    // new_img.save("./genimg_2.png").unwrap(); //debug preview
+
+    new_img
+}
 
 #[no_mangle]
 /// Old function - to be removed. Generates only 3x3 grid, takes a struct containing array of 9 enums.

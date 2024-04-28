@@ -8,8 +8,11 @@ int main() {
     
     vector<float> xarray{ .1, .4, .4 };
     vector<float> yarray{ .1, .1, .4 };
+    vector<float> xarray2{ .7, .5, .5 };
+    vector<float> yarray2{ .2, .2, .5 };
 
-    TextureBuffer x = generate_desert_spec_line_sym(&xarray[0], &yarray[0], xarray.size(), 30.0,1);
+   // TextureBuffer x = generate_desert_spec_line_sym(&xarray[0], &yarray[0], xarray.size(), 30.0,1);
+    TextureBuffer x = generate_desert_spec_line_2(&xarray[0], &yarray[0], xarray.size(), &xarray2[0], &yarray2[0], xarray2.size(), 30.0);
 
     WtxPuzzle3x3 puzzle = { {
                 WtxColor::NoColor,              WtxColor::TricolorGreen,    WtxColor::NoColor,
